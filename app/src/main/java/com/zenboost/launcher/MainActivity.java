@@ -1,203 +1,271 @@
 package com.zenboost.launcher;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.os.Bundle;
-import android.os.Build;
-import android.os.Environment;
-import android.os.StatFs;
-import android.os.BatteryManager;
-import android.content.Context;
-import android.content.Intent;
-import android.content.pm.ApplicationInfo;
-import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.view.Gravity;
 import android.view.View;
-import android.widget.Button;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
+import android.provider.Settings;
 import android.widget.LinearLayout;
-import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.ScrollView;
 import android.widget.Toast;
 
-import java.io.File;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 
 public class MainActivity extends Activity {
 
-    private final int PURPLE = Color.rgb(176, 38, 255);
-    private final int BLACK = Color.rgb(8, 10, 12);
-    private final int GRAY = Color.rgb(25, 29, 32);
-    private LinearLayout root;
+    LinearLayout root;
 
-    private TextView ramView;
-    private TextView storageView;
-    private TextView batteryView;
+    final int purple = Color.rgb(176, 38, 255);
+    final int black = Color.rgb(8, 10, 12);
+    final int gray = Color.rgb(25, 29, 32);
 
-    private TextView createText(String text, int size, int color) {
+    TextView createText(String text, int size, int color) {
         TextView t = new TextView(this);
         t.setText(text);
         t.setTextSize(size);
         t.setTextColor(color);
         t.setGravity(Gravity.CENTER);
         t.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-        t.setPadding(12, 12, 12, 12);
         return t;
     }
 
-    private Button createButton(String text) {
+    Button createButton(String text) {
         Button b = new Button(this);
         b.setText(text);
-        b.setTextColor(PURPLE);
-        b.setBackgroundColor(GRAY);
+        b.setTextColor(purple);
+        b.setBackgroundColor(gray);
         b.setAllCaps(false);
-        b.setTextSize(15);
+        b.setTextSize(16);
         return b;
     }
 
-    private void addSpace(int height) {
+    void addSpace(int height) {
         View v = new View(this);
         root.addView(v, new LinearLayout.LayoutParams(1, height));
     }
 
-    private void addButton(String text, Runnable action) {
-        Button b = createButton(text);
-        root.addView(b, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 62));
+    void setupRoot() {
+        root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(24, 24, 24, 24);
+        root.setBackgroundColor(black);
+        setContentView(root);
+    }
 
-        b.setOnClickListener(v -> action.run());
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        getWindow().setStatusBarColor(black);
+        getWindow().setNavigationBarColor(black);
+        showHome();
+    }
+
+    void showHome() {
+        setupRoot();
+        root.setGravity(Gravity.CENTER);
+
+        TextView title = createText("ZEN BOOST", 30, purple);
+        root.addView(title);
+
+        addSpace(8);
+        root.addView(createText("PERFORMANCE INTERFACE", 12, Color.GRAY));
+
+        addSpace(45);
+
+        TextView clock = createText(
+                new java.text.SimpleDateFormat("HH:mm", Locale.getDefault())
+                        .format(new java.util.Date()),
+                64, Color.WHITE);
+        root.addView(clock);
+
+        TextView date = createText(
+                new java.text.SimpleDateFormat("EEEE, dd MMMM",
+                        Locale.getDefault()).format(new java.util.Date()),
+                16, Color.GRAY);
+        root.addView(date);
+
+        addSpace(35);
+
+        Button apps = createButton("▦     APLICACIONES");
+        root.addView(apps, new LinearLayout.LayoutParams(-1, 65));
+        apps.setOnClickListener(v -> showApps());
+
+        addSpace(12);
+
+        Button gaming = createButton("⚡     MODO GAMING");
+        root.addView(gaming, new LinearLayout.LayoutParams(-1, 65));
+        gaming.setOnClickListener(v -> {
+            Toast.makeText(this,
+                    "Modo Gaming: siguiente fase",
+                    Toast.LENGTH_SHORT).show();
+        });
+
+        addSpace(12);
+
+        Button settings = createButton("⚙     AJUSTES DEL SISTEMA");
+        root.addView(settings, new LinearLayout.LayoutParams(-1, 65));
+        settings.setOnClickListener(v ->
+                startActivity(new Intent(Settings.ACTION_SETTINGS)));
+
+        addSpace(35);
+        root.addView(createText("LIGHT  •  FAST  •  CLEAN", 12, purple));
+    }
+
+    void showApps() {
+        setupRoot();
+
+        TextView title = createText("ZEN BOOST / APPS", 24, purple);
+        root.addView(title);
+
         addSpace(10);
+
+        Button back = createButton("← VOLVER");
+        root.addView(back, new LinearLayout.LayoutParams(-1, 55));
+        back.setOnClickListener(v -> showHome());
+
+        addSpace(12);
+
+        EditText search = new EditText(this);
+        search.setSingleLine(true);
+        search.setHint("Buscar aplicación...");
+        search.setHintTextColor(Color.GRAY);
+        search.setTextColor(Color.WHITE);
+        search.setBackgroundColor(gray);
+        search.setPadding(20, 12, 20, 12);
+        root.addView(search, new LinearLayout.LayoutParams(-1, 55));
+
+        addSpace(10);
+
+        TextView count = createText("Cargando aplicaciones...", 14, Color.GRAY);
+        root.addView(count);
+
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        scroll.addView(list);
+
+        root.addView(scroll, new LinearLayout.LayoutParams(
+                -1, 0, 1f));
+
+        List<ResolveInfo> apps = getLauncherApps();
+
+        count.setText(apps.size() + " aplicaciones disponibles");
+
+        renderApps(apps, list, search, count);
+
+        search.addTextChangedListener(new android.text.TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start,
+                    int count, int after) {}
+
+            @Override
+            public void onTextChanged(CharSequence s, int start,
+                    int before, int count) {
+                renderApps(apps, list, search, null);
+            }
+
+            @Override
+            public void afterTextChanged(android.text.Editable s) {}
+        });
     }
 
-    private String formatSize(long bytes) {
-        if (bytes < 1024) return bytes + " B";
-        if (bytes < 1024L * 1024L)
-            return String.format("%.1f KB", bytes / 1024.0);
-        if (bytes < 1024L * 1024L * 1024L)
-            return String.format("%.1f MB", bytes / (1024.0 * 1024.0));
-        return String.format("%.2f GB",
-                bytes / (1024.0 * 1024.0 * 1024.0));
-    }
-
-    private String getRamInfo() {
-        android.app.ActivityManager am =
-                (android.app.ActivityManager) getSystemService(ACTIVITY_SERVICE);
-
-        android.app.ActivityManager.MemoryInfo mi =
-                new android.app.ActivityManager.MemoryInfo();
-
-        am.getMemoryInfo(mi);
-
-        long total = mi.totalMem;
-        long available = mi.availMem;
-        long used = total - available;
-
-        return "RAM USADA: " + formatSize(used)
-                + "\nRAM DISPONIBLE: " + formatSize(available)
-                + "\nRAM TOTAL: " + formatSize(total);
-    }
-
-    private String getStorageInfo() {
-        StatFs stat = new StatFs(Environment.getDataDirectory().getPath());
-
-        long total = stat.getTotalBytes();
-        long free = stat.getAvailableBytes();
-        long used = total - free;
-
-        int percent = total > 0 ? (int) ((used * 100L) / total) : 0;
-
-        return "ALMACENAMIENTO USADO: " + formatSize(used)
-                + "\nESPACIO LIBRE: " + formatSize(free)
-                + "\nCAPACIDAD TOTAL: " + formatSize(total)
-                + "\nUSO: " + percent + "%";
-    }
-
-    private String getBatteryInfo() {
-        BatteryManager bm = (BatteryManager)
-                getSystemService(Context.BATTERY_SERVICE);
-
-        int level = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY);
-
-        return "BATERÍA: " + level + "%";
-    }
-
-    private void updateMonitor() {
-        if (ramView != null) ramView.setText(getRamInfo());
-        if (storageView != null) storageView.setText(getStorageInfo());
-        if (batteryView != null) batteryView.setText(getBatteryInfo());
-    }
-
-    private void showApps(boolean gamesMode) {
-        PackageManager pm = getPackageManager();
-
+    List<ResolveInfo> getLauncherApps() {
         Intent intent = new Intent(Intent.ACTION_MAIN);
         intent.addCategory(Intent.CATEGORY_LAUNCHER);
 
-        List<ApplicationInfo> apps =
-                pm.queryIntentActivities(intent, 0) == null
-                        ? new ArrayList<>()
-                        : new ArrayList<>();
+        PackageManager pm = getPackageManager();
+        List<ResolveInfo> result = pm.queryIntentActivities(intent, 0);
 
-        for (android.content.pm.ResolveInfo ri :
-                pm.queryIntentActivities(intent, 0)) {
-            ApplicationInfo ai = ri.activityInfo.applicationInfo;
+        List<ResolveInfo> filtered = new ArrayList<>();
 
-            if (ai.packageName.equals(getPackageName())) continue;
+        for (ResolveInfo info : result) {
+            if (info.activityInfo == null) continue;
 
-            if (!apps.contains(ai)) apps.add(ai);
-        }
+            String packageName = info.activityInfo.packageName;
 
-        ArrayList<ApplicationInfo> filtered = new ArrayList<>();
-
-        for (ApplicationInfo ai : apps) {
-            String label = pm.getApplicationLabel(ai).toString();
-
-            if (gamesMode) {
-                String s = label.toLowerCase();
-
-                if (s.contains("game") || s.contains("play")
-                        || s.contains("pubg") || s.contains("free fire")
-                        || s.contains("minecraft") || s.contains("roblox")
-                        || s.contains("cod") || s.contains("call of duty")
-                        || s.contains("clash") || s.contains("genshin")
-                        || s.contains("fortnite") || s.contains("mobile legends")
-                        || s.contains("asphalt") || s.contains("brawl")
-                        || s.contains("pokemon") || s.contains("wild rift")) {
-                    filtered.add(ai);
-                }
-            } else {
-                filtered.add(ai);
+            if (!packageName.equals(getPackageName())) {
+                filtered.add(info);
             }
         }
 
-        filtered.sort((a, b) ->
-                pm.getApplicationLabel(a).toString().compareToIgnoreCase(
-                        pm.getApplicationLabel(b).toString()));
+        Collections.sort(filtered, new Comparator<ResolveInfo>() {
+            @Override
+            public int compare(ResolveInfo a, ResolveInfo b) {
+                String nameA = a.loadLabel(pm).toString();
+                String nameB = b.loadLabel(pm).toString();
 
-        if (filtered.isEmpty()) {
-            Toast.makeText(this,
-                    gamesMode ? "No se detectaron juegos automáticamente"
-                            : "No se encontraron aplicaciones",
-                    Toast.LENGTH_SHORT).show();
+                return nameA.toLowerCase(Locale.getDefault())
+                        .compareTo(nameB.toLowerCase(Locale.getDefault()));
+            }
+        });
 
-            if (gamesMode) showApps(false);
-            return;
-        }
+        return filtered;
+    }
 
-        String[] names = new String[filtered.size()];
+    void renderApps(List<ResolveInfo> apps,
+                    LinearLayout list,
+                    EditText search,
+                    TextView count) {
 
-        for (int i = 0; i < filtered.size(); i++) {
-            names[i] = pm.getApplicationLabel(filtered.get(i)).toString();
-        }
+        list.removeAllViews();
 
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle(gamesMode ? "🎮 Selecciona un juego"
-                        : "📱 Aplicaciones")
-                .setItems(names, (d, which) -> {
-                    ApplicationInfo selected = filtered.get(which);
-                    Intent launch = pm.getLaunchIntentForPackage(selected.packageName);
+        String query = search.getText().toString()
+                .trim().toLowerCase(Locale.getDefault());
+
+        int shown = 0;
+
+        for (ResolveInfo info : apps) {
+            String name = info.loadLabel(getPackageManager()).toString();
+
+            if (!name.toLowerCase(Locale.getDefault()).contains(query)) {
+                continue;
+            }
+
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(12, 8, 12, 8);
+            row.setBackgroundColor(gray);
+
+            TextView icon = new TextView(this);
+            icon.setText("▣");
+            icon.setTextColor(purple);
+            icon.setTextSize(25);
+            icon.setGravity(Gravity.CENTER);
+            row.addView(icon, new LinearLayout.LayoutParams(55, 60));
+
+            TextView label = new TextView(this);
+            label.setText(name);
+            label.setTextColor(Color.WHITE);
+            label.setTextSize(16);
+            label.setGravity(Gravity.CENTER_VERTICAL);
+            row.addView(label, new LinearLayout.LayoutParams(
+                    0, 60, 1f));
+
+            TextView open = new TextView(this);
+            open.setText("ABRIR  ›");
+            open.setTextColor(purple);
+            open.setTextSize(12);
+            open.setGravity(Gravity.CENTER);
+            row.addView(open, new LinearLayout.LayoutParams(90, 60));
+
+            row.setOnClickListener(v -> {
+                try {
+                    Intent launch = getPackageManager()
+                            .getLaunchIntentForPackage(
+                                    info.activityInfo.packageName);
 
                     if (launch != null) {
                         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -207,199 +275,35 @@ public class MainActivity extends Activity {
                                 "No se puede abrir esta aplicación",
                                 Toast.LENGTH_SHORT).show();
                     }
-                })
-                .setNegativeButton("Cerrar", null)
-                .create();
+                } catch (Exception e) {
+                    Toast.makeText(this,
+                            "Error al abrir la aplicación",
+                            Toast.LENGTH_SHORT).show();
+                }
+            });
 
-        dialog.show();
-    }
+            LinearLayout.LayoutParams params =
+                    new LinearLayout.LayoutParams(-1, -2);
+            params.setMargins(0, 0, 0, 8);
+            list.addView(row, params);
 
-    private void showRam() {
-        new AlertDialog.Builder(this)
-                .setTitle("📊 Monitor RAM")
-                .setMessage(getRamInfo())
-                .setPositiveButton("Actualizar", (d, w) -> showRam())
-                .setNegativeButton("Cerrar", null)
-                .show();
-    }
-
-    private void showStorage() {
-        new AlertDialog.Builder(this)
-                .setTitle("💾 Almacenamiento")
-                .setMessage(getStorageInfo())
-                .setPositiveButton("Ajustes", (d, w) -> {
-                    try {
-                        startActivity(new Intent(
-                                android.provider.Settings.ACTION_INTERNAL_STORAGE_SETTINGS));
-                    } catch (Exception e) {
-                        startActivity(new Intent(
-                                android.provider.Settings.ACTION_SETTINGS));
-                    }
-                })
-                .setNegativeButton("Cerrar", null)
-                .show();
-    }
-
-    private void showBattery() {
-        new AlertDialog.Builder(this)
-                .setTitle("🔋 Batería")
-                .setMessage(getBatteryInfo()
-                        + "\n\nZEN BOOST no puede forzar modos internos"
-                        + " de batería, pero puedes configurarlos desde Android.")
-                .setPositiveButton("Ahorro de batería", (d, w) -> {
-                    try {
-                        startActivity(new Intent(
-                                android.provider.Settings.ACTION_BATTERY_SAVER));
-                    } catch (Exception e) {
-                        startActivity(new Intent(
-                                android.provider.Settings.ACTION_SETTINGS));
-                    }
-                })
-                .setNegativeButton("Cerrar", null)
-                .show();
-    }
-
-    private void cleanCache() {
-        long before = getCacheSize(getCacheDir());
-
-        deleteContents(getCacheDir());
-
-        long after = getCacheSize(getCacheDir());
-        long cleaned = Math.max(0, before - after);
-
-        Toast.makeText(this,
-                "Caché propia limpiada: " + formatSize(cleaned),
-                Toast.LENGTH_LONG).show();
-
-        updateMonitor();
-    }
-
-    private long getCacheSize(File file) {
-        if (file == null || !file.exists()) return 0;
-
-        long size = 0;
-
-        if (file.isFile()) return file.length();
-
-        File[] files = file.listFiles();
-        if (files != null) {
-            for (File f : files) size += getCacheSize(f);
+            shown++;
         }
 
-        return size;
-    }
-
-    private void deleteContents(File file) {
-        if (file == null || !file.exists()) return;
-
-        File[] files = file.listFiles();
-        if (files == null) return;
-
-        for (File f : files) {
-            if (f.isDirectory()) deleteContents(f);
-            f.delete();
+        if (count != null) {
+            count.setText(shown + " aplicaciones");
         }
-    }
 
-    private void showSettings() {
-        startActivity(new Intent(
-                android.provider.Settings.ACTION_SETTINGS));
+        if (shown == 0) {
+            TextView empty = createText(
+                    "No se encontraron aplicaciones",
+                    16, Color.GRAY);
+            list.addView(empty);
+        }
     }
 
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-
-        getWindow().setStatusBarColor(BLACK);
-        getWindow().setNavigationBarColor(BLACK);
-
-        ScrollView scroll = new ScrollView(this);
-
-        root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(24, 30, 24, 30);
-        root.setGravity(Gravity.CENTER_HORIZONTAL);
-        root.setBackgroundColor(BLACK);
-
-        scroll.setBackgroundColor(BLACK);
-        scroll.addView(root);
-
-        setContentView(scroll);
-
-        addSpace(25);
-
-        root.addView(createText("ZEN BOOST 2.0", 30, PURPLE));
-        root.addView(createText("ULTRA PERFORMANCE", 13, Color.GRAY));
-
-        addSpace(18);
-
-        TextView clock = createText("", 58, Color.WHITE);
-        root.addView(clock);
-
-        TextView date = createText("", 16, Color.GRAY);
-        root.addView(date);
-
-        Runnable updateClock = new Runnable() {
-            @Override
-            public void run() {
-                java.util.Date now = new java.util.Date();
-
-                clock.setText(new java.text.SimpleDateFormat(
-                        "HH:mm").format(now));
-
-                date.setText(new java.text.SimpleDateFormat(
-                        "EEEE, dd MMMM").format(now));
-
-                clock.postDelayed(this, 1000);
-            }
-        };
-
-        clock.post(updateClock);
-
-        addSpace(20);
-
-        TextView monitorTitle =
-                createText("SYSTEM MONITOR", 16, PURPLE);
-        root.addView(monitorTitle);
-
-        ramView = createText(getRamInfo(), 13, Color.WHITE);
-        root.addView(ramView);
-
-        storageView = createText(getStorageInfo(), 13, Color.WHITE);
-        root.addView(storageView);
-
-        batteryView = createText(getBatteryInfo(), 13, Color.WHITE);
-        root.addView(batteryView);
-
-        addSpace(18);
-
-        addButton("📱  APLICACIONES", () -> showApps(false));
-
-        addButton("🎮  GAMING PRO", () -> showApps(true));
-
-        addButton("📊  MONITOR RAM", () -> showRam());
-
-        addButton("💾  STORAGE MONITOR", () -> showStorage());
-
-        addButton("🔋  BATTERY SAVER", () -> showBattery());
-
-        addButton("🧹  SMART CLEANER", () -> {
-            new AlertDialog.Builder(this)
-                    .setTitle("Smart Cleaner")
-                    .setMessage("Limpiar caché temporal de ZEN BOOST."
-                            + "\nNo se borrarán datos de otras aplicaciones.")
-                    .setPositiveButton("Limpiar", (d, w) -> cleanCache())
-                    .setNegativeButton("Cancelar", null)
-                    .show();
-        });
-
-        addButton("⚙️  SYSTEM SETTINGS", () -> showSettings());
-
-        addSpace(20);
-
-        root.addView(createText(
-                "LIGHT  •  FAST  •  CLEAN", 12, PURPLE));
-
-        addSpace(20);
+    public void onBackPressed() {
+        showHome();
     }
 }
